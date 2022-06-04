@@ -5,49 +5,44 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/gorilla/mux"
 )
-
-type PostsList struct {
-	Posts []struct {
-		Author     string   `json:"author"`
-		AuthorID   int      `json:"authorId"`
-		ID         int      `json:"id"`
-		Likes      int      `json:"likes"`
-		Popularity float64  `json:"popularity"`
-		Reads      int      `json:"reads"`
-		Tags       []string `json:"tags"`
-	} `json:"posts"`
-}
-
-func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Welcome to the HomePage!")
-	fmt.Println("Endpoint Hit: homePage")
-}
-
-func handleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/", homePage)
-	myRouter.HandleFunc("/posts", getPosts)
-
-	log.Fatal(http.ListenAndServe(":8080", myRouter))
-}
 
 //  ! global variable
 var BaseURL = "https://api.hatchways.io/assessment/blog/posts?tag="
 var posts PostsList
 
-func main() {
-	fmt.Println("Rest API using hatchways API")
-	handleRequests()
+type Post struct {
+	Author     string   `json:"author"`
+	AuthorID   int      `json:"authorId"`
+	ID         int      `json:"id"`
+	Likes      int      `json:"likes"`
+	Popularity float64  `json:"popularity"`
+	Reads      int      `json:"reads"`
+	Tags       []string `json:"tags"`
+}
 
+type PostsList struct {
+	Posts []Post `json:"posts"`
+}
+
+func homePage(w http.ResponseWriter, r *http.Request) {
+	ip := r.RemoteAddr
+	xff := r.Header.Get("X-Forwarded-For")
+	fmt.Fprintf(w, "Welcome to the HomePage!")
+	fmt.Println("Endpoint Hit: homePage")
+	fmt.Println("IP: ", ip)
+	fmt.Println("X-Forwarded-For: ", xff)
 }
 
 func getPosts(w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 	tag := queryParams["tag"]
-	fmt.Println(tag)
+	sort := queryParams["sortBy"]
+	direction := queryParams["direction"]
+	// fmt.Println(tag)
 	var tempPosts PostsList
 	// now we do a GET request to the API
 	// we use the tag variable to get the posts
@@ -60,7 +55,7 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 		}
 		defer resp.Body.Close()
 		// we use the json.Decoder to decode the response
-		fmt.Println(resp.Body)
+		// fmt.Println(resp.Body)
 		err = json.NewDecoder(resp.Body).Decode(&tempPosts)
 		if err != nil {
 			fmt.Println(err)
@@ -88,32 +83,64 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
+	// print type of posts
+	// fmt.Println(reflect.TypeOf(posts))
+	if sort != nil {
+		sortBy(posts.Posts, sort[0], direction[0])
+	}
 	json.NewEncoder(w).Encode(posts)
 
 }
 
-func contains(s []struct {
-	Author     string   `json:"author"`
-	AuthorID   int      `json:"authorId"`
-	ID         int      `json:"id"`
-	Likes      int      `json:"likes"`
-	Popularity float64  `json:"popularity"`
-	Reads      int      `json:"reads"`
-	Tags       []string `json:"tags"`
-}, e struct {
-	Author     string   `json:"author"`
-	AuthorID   int      `json:"authorId"`
-	ID         int      `json:"id"`
-	Likes      int      `json:"likes"`
-	Popularity float64  `json:"popularity"`
-	Reads      int      `json:"reads"`
-	Tags       []string `json:"tags"`
-}) bool {
+func contains(s []Post, e Post) bool {
 	for _, a := range s {
-		if a.AuthorID == e.AuthorID {
+		if a.ID == e.ID {
 			return true
 		}
 	}
 	return false
+}
+
+func sortBy(s []Post, field string, direction string) {
+	if direction == "asc" {
+		var less func(i, j int) bool
+		switch field {
+		case "id":
+			less = func(i, j int) bool { return s[i].ID < s[j].ID }
+		case "reads":
+			less = func(i, j int) bool { return s[i].Reads < s[j].Reads }
+		case "likes":
+			less = func(i, j int) bool { return s[i].Likes < s[j].Likes }
+		case "popularity":
+			less = func(i, j int) bool { return s[i].Popularity < s[j].Popularity }
+		}
+		sort.Slice(s, less)
+	} else if direction == "desc" {
+		var less func(i, j int) bool
+		switch field {
+		case "id":
+			less = func(i, j int) bool { return s[i].ID > s[j].ID }
+		case "reads":
+			less = func(i, j int) bool { return s[i].Reads > s[j].Reads }
+		case "likes":
+			less = func(i, j int) bool { return s[i].Likes > s[j].Likes }
+		case "popularity":
+			less = func(i, j int) bool { return s[i].Popularity > s[j].Popularity }
+		}
+		sort.Slice(s, less)
+	}
+}
+
+func handleRequests() {
+	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/", homePage)
+	myRouter.HandleFunc("/posts", getPosts)
+
+	log.Fatal(http.ListenAndServe(":8080", myRouter))
+}
+
+func main() {
+	fmt.Println("Rest API using hatchways API")
+	handleRequests()
+
 }
