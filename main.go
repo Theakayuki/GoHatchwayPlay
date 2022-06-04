@@ -86,7 +86,11 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	// print type of posts
 	// fmt.Println(reflect.TypeOf(posts))
 	if sort != nil {
-		sortBy(posts.Posts, sort[0], direction[0])
+		if len(direction) == 1 {
+			sortBy(posts.Posts, sort[0], direction[0])
+		} else {
+			sortBy(posts.Posts, sort[0], "asc")
+		}
 	}
 	json.NewEncoder(w).Encode(posts)
 
